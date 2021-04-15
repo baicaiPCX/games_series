@@ -79,7 +79,7 @@ namespace rst
 
         void rasterize_triangle(const Triangle& t);
 
-        // static bool insideTriangle(Eigen::Vector4f v[3]);
+        bool insideTriangle(std::array<Eigen::Vector4f,3>& v,int i,int j,float weight[3]);
 
         // VERTEX SHADER -> MVP -> Clipping -> /.W -> VIEWPORT -> DRAWLINE/DRAWTRI -> FRAGSHADER
 

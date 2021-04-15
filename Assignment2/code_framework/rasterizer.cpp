@@ -102,6 +102,140 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
     }
 }
 
+bool rst::rasterizer::insideTriangle(std::array<Eigen::Vector4f,3>& v,int x,int y,float weight[3]){
+    Eigen::Vector3f v2d[3];
+    Eigen::Vector3f p;
+    float area[3];
+    float sum_area;
+    int flag[3]={1,1,1};
+    p<<x,y,0;
+    for(int i=0;i<3;++i){
+        v2d[i]=v[i].head(3);
+        v2d[i][2]=0;
+    }
+    for(int i=0;i<3;++i){//is inside?
+        Eigen::Vector3f v_i=v2d[(i+1)%3]-v2d[i];
+        Eigen::Vector3f v_p=p-v2d[i];
+        Eigen::Vector3f v_c=v_i.cross(v_p);
+        if(v_c[2]<0){
+            flag[i]=-1;
+        }
+        area[(i+2)%3]=v_c.norm();
+    }
+    if((flag[0]<0 and flag[1]<0 and flag[2]<0) or (
+        flag[0]>0 and flag[1]>0 and flag[2]>0
+    )){
+        sum_area=area[0]+area[1]+area[2];
+        for(int i=0;i<3;++i){
+            weight[i]=area[i]/sum_area;
+        }
+        return true;
+    }
+    return false;
+}
+
+// Bresenham's line drawing algorithm
+// Code taken from a stack overflow answer: https://stackoverflow.com/a/16405254
+void rst::rasterizer::draw_line(Eigen::Vector3f begin, Eigen::Vector3f end)
+{
+    auto x1 = begin.x();
+    auto y1 = begin.y();
+    auto x2 = end.x();
+    auto y2 = end.y();
+
+    Eigen::Vector3f line_color = {255, 255, 255};
+
+    int x,y,dx,dy,dx1,dy1,px,py,xe,ye,i;
+
+    dx=x2-x1;
+    dy=y2-y1;
+    dx1=fabs(dx);
+    dy1=fabs(dy);
+    px=2*dy1-dx1;
+    py=2*dx1-dy1;
+
+    if(dy1<=dx1)
+    {
+        if(dx>=0)
+        {
+            x=x1;
+            y=y1;
+            xe=x2;
+        }
+        else
+        {
+            x=x2;
+            y=y2;
+            xe=x1;
+        }
+        Eigen::Vector3f point = Eigen::Vector3f(x, y, 1.0f);
+        set_pixel(point,line_color);
+        for(i=0;x<xe;i++)
+        {
+            x=x+1;
+            if(px<0)
+            {
+                px=px+2*dy1;
+            }
+            else
+            {
+                if((dx<0 && dy<0) || (dx>0 && dy>0))
+                {
+                    y=y+1;
+                }
+                else
+                {
+                    y=y-1;
+                }
+                px=px+2*(dy1-dx1);
+            }
+//            delay(0);
+            Eigen::Vector3f point = Eigen::Vector3f(x, y, 1.0f);
+            set_pixel(point,line_color);
+        }
+    }
+    else
+    {
+        if(dy>=0)
+        {
+            x=x1;
+            y=y1;
+            ye=y2;
+        }
+        else
+        {
+            x=x2;
+            y=y2;
+            ye=y1;
+        }
+        Eigen::Vector3f point = Eigen::Vector3f(x, y, 1.0f);
+        set_pixel(point,line_color);
+        for(i=0;y<ye;i++)
+        {
+            y=y+1;
+            if(py<=0)
+            {
+                py=py+2*dx1;
+            }
+            else
+            {
+                if((dx<0 && dy<0) || (dx>0 && dy>0))
+                {
+                    x=x+1;
+                }
+                else
+                {
+                    x=x-1;
+                }
+                py=py+2*(dx1-dy1);
+            }
+//            delay(0);
+            Eigen::Vector3f point = Eigen::Vector3f(x, y, 1.0f);
+            set_pixel(point,line_color);
+        }
+    }
+}
+
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t) {
     auto v = t.toVector4();
@@ -120,16 +254,24 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
             // iterate through the pixel and find if the current pixel is inside the triangle
             Eigen::Vector3f point;
             Eigen::Vector3f color;
+            float weight[3];
             point[0]=i;point[1]=j;point[2]=0.2;
-            color[0]=255;color[1]=255;color[2]=255;
+            bool is_in=insideTriangle(v,i,j,weight);
+            if(not is_in){
+                continue;
+            }
             // If so, use the following code to get the interpolated z value.
             //auto[alpha, beta, gamma] = computeBarycentric2D(x, y, t.v);
-            //float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
-            //float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
-            //z_interpolated *= w_reciprocal;
+            float w_reciprocal = 1.0/(weight[0] / v[0].w() + weight[1] / v[1].w() + weight[2] / v[2].w());
+            float z_interpolated = weight[0] * v[0].z() / v[0].w() + weight[1] * v[1].z() / v[1].w() + weight[2] * v[2].z() / v[2].w();
+            z_interpolated *= w_reciprocal;
+            point[2]=z_interpolated;
 
             // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
-            set_pixel(point,color);
+            for(int i=0;i<3;++i){
+                color[i]=t.color[0][i]*weight[0]+t.color[1][i]*weight[1]+t.color[2][i]*weight[2];
+            }
+            set_pixel(point,color*255);
         }
     }
    
