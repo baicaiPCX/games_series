@@ -8,7 +8,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/home/pichengxiang/Documents/games_series/Assignment2/code_framework/build/Rasterizer",
+            "program": "/home/pichengxiang/Documents/games_series/Assignment3/Code/build/Rasterizer",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
